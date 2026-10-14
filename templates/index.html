@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Aplicación sencilla para practicar la estructura de datos pila.">
+    <title>Mi pila | Estructuras de datos</title>
+    <link
+      href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}"
+      rel="stylesheet"
+    >
+  </head>
+  <body class="bg-light">
+    <header class="bg-primary text-white py-4">
+      <div class="container">
+        <h1 class="h2 mb-1">Mi pila</h1>
+        <p class="mb-0">Practica la estructura LIFO: el último en entrar es el primero en salir.</p>
+      </div>
+    </header>
+
+    <main class="container py-4">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div aria-live="polite" aria-atomic="true">
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      <div class="row g-4">
+        <section class="col-12 col-lg-5" aria-labelledby="config-title">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <h2 class="h4 card-title" id="config-title">Configuración</h2>
+              <p class="text-body-secondary">Elige cuántos elementos podrá contener la pila.</p>
+              <form action="{{ url_for('configure') }}" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label for="capacity" class="form-label">Capacidad (1–{{ max_capacity }})</label>
+                <div class="input-group">
+                  <input
+                    type="number"
+                    class="form-control"
+                    id="capacity"
+                    name="capacity"
+                    min="1"
+                    max="{{ max_capacity }}"
+                    value="{{ capacity if capacity is not none else 5 }}"
+                    required
+                  >
+                  <button class="btn btn-primary" type="submit">
+                    {{ "Reiniciar pila" if capacity is not none else "Crear pila" }}
+                  </button>
+                </div>
+              </form>
+              {% if capacity is not none %}
+                <p class="small text-body-secondary mt-2 mb-0">
+                  Esta pila es privada de esta sesión del navegador.
+                </p>
+              {% endif %}
+            </div>
+          </div>
+
+          {% if capacity is not none %}
+            <div class="card shadow-sm mt-4">
+              <div class="card-body">
+                <h2 class="h4 card-title">Agregar elemento</h2>
+                <form action="{{ url_for('add_item') }}" method="post">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <label for="item" class="form-label">Valor</label>
+                  <div class="input-group">
+                    <input
+                      type="text"
+                      class="form-control"
+                      id="item"
+                      name="item"
+                      maxlength="{{ max_item_length }}"
+                      placeholder="Ejemplo: Libro"
+                      autocomplete="off"
+                      required
+                    >
+                    <button class="btn btn-success" type="submit" {% if item_count >= capacity %}disabled{% endif %}>
+                      Apilar
+                    </button>
+                  </div>
+                  <div class="form-text">Máximo {{ max_item_length }} caracteres.</div>
+                </form>
+              </div>
+            </div>
+          {% endif %}
+        </section>
+
+        <section class="col-12 col-lg-7" aria-labelledby="stack-title">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                <div>
+                  <h2 class="h4 card-title mb-1" id="stack-title">Contenido de la pila</h2>
+                  {% if capacity is not none %}
+                    <p class="text-body-secondary mb-0">
+                      {{ item_count }} de {{ capacity }} elementos
+                    </p>
+                  {% else %}
+                    <p class="text-body-secondary mb-0">Configura una pila para empezar.</p>
+                  {% endif %}
+                </div>
+                {% if capacity is not none %}
+                  <span class="badge text-bg-primary fs-6">
+                    {{ "Llena" if item_count >= capacity else "Disponible" }}
+                  </span>
+                {% endif %}
+              </div>
+
+              {% if capacity is none %}
+                <div class="alert alert-info mb-0" role="status">
+                  Usa el formulario de configuración para crear tu pila.
+                </div>
+              {% elif stack_reversed %}
+                <ol class="list-group list-group-numbered" aria-label="Elementos de la pila, desde el tope">
+                  {% for item in stack_reversed %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                      <span class="text-break">{{ item }}</span>
+                      {% if loop.first %}
+                        <span class="badge text-bg-success ms-3">Tope</span>
+                      {% endif %}
+                    </li>
+                  {% endfor %}
+                </ol>
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                  <form action="{{ url_for('remove_item') }}" method="post" data-confirm="¿Desapilar el elemento que está en el tope?">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-warning" type="submit">Desapilar tope</button>
+                  </form>
+                  <form action="{{ url_for('show_top') }}" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-outline-primary" type="submit">Consultar tope</button>
+                  </form>
+                  <form action="{{ url_for('clear_stack') }}" method="post" data-confirm="¿Vaciar todos los elementos de la pila?">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-outline-danger" type="submit">Vaciar pila</button>
+                  </form>
+                </div>
+              {% else %}
+                <div class="alert alert-secondary mb-0" role="status">
+                  La pila está vacía. Agrega un elemento para verlo aquí.
+                </div>
+                <form action="{{ url_for('show_top') }}" method="post" class="mt-3">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-outline-primary" type="submit">Consultar tope</button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+          <p class="small text-body-secondary mt-3">
+            La cima de la pila siempre aparece primero. Al desapilar, se elimina ese elemento.
+          </p>
+        </section>
+      </div>
+    </main>
+
+    <script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
+    <script>
+      document.querySelectorAll("form[data-confirm]").forEach((form) => {
+        form.addEventListener("submit", (event) => {
+          if (!window.confirm(form.dataset.confirm)) {
+            event.preventDefault();
+          }
+        });
+      });
+    </script>
+  </body>
+</html>
