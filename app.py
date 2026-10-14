@@ -49,8 +49,14 @@ def _photo_path(photo_id: str) -> Path:
     return Path(app.instance_path) / PHOTO_DIRECTORY / f"{photo_id}.jpg"
 
 
+def _is_photo_item(item: str) -> bool:
+    return item.startswith(PHOTO_PREFIX) and bool(
+        PHOTO_ID_PATTERN.fullmatch(item.removeprefix(PHOTO_PREFIX))
+    )
+
+
 def _delete_photo(item: str) -> bool:
-    if not item.startswith(PHOTO_PREFIX):
+    if not _is_photo_item(item):
         return True
     try:
         _photo_path(item.removeprefix(PHOTO_PREFIX)).unlink(missing_ok=True)
@@ -58,6 +64,16 @@ def _delete_photo(item: str) -> bool:
         app.logger.exception("No se pudo eliminar una foto de la pila.")
         return False
     return True
+
+
+def _get_image_queue() -> list[str]:
+    image_queue = session.get("image_queue", [])
+    if (
+        not isinstance(image_queue, list)
+        or not all(isinstance(item, str) and _is_photo_item(item) for item in image_queue)
+    ):
+        return []
+    return image_queue
 
 
 def _get_stack_state() -> tuple[list[str], int] | None:
@@ -72,7 +88,18 @@ def _get_stack_state() -> tuple[list[str], int] | None:
         or not 1 <= capacity <= MAX_STACK_CAPACITY
     ):
         return None
-    return cast(list[str], stack), capacity
+
+    clean_stack = cast(list[str], stack)
+    legacy_photos = [
+        item for item in clean_stack if _is_photo_item(item)
+    ]
+    if legacy_photos:
+        session["image_queue"] = _get_image_queue() + legacy_photos
+        session["stack"] = [
+            item for item in clean_stack if not _is_photo_item(item)
+        ]
+        clean_stack = cast(list[str], session["stack"])
+    return clean_stack, capacity
 
 
 def _require_stack() -> tuple[list[str], int] | None:
@@ -87,9 +114,12 @@ def _require_stack() -> tuple[list[str], int] | None:
 def index():
     state = _get_stack_state()
     stack, capacity = state if state is not None else ([], None)
+    image_queue = _get_image_queue()
     return render_template(
         "index.html",
         stack_reversed=list(reversed(stack)),
+        image_queue=image_queue,
+        image_count=len(image_queue),
         capacity=capacity,
         item_count=len(stack),
         max_capacity=MAX_STACK_CAPACITY,
@@ -101,7 +131,10 @@ def index():
 @app.get("/fotos/<photo_id>")
 def photo(photo_id: str):
     state = _get_stack_state()
-    if state is None or f"{PHOTO_PREFIX}{photo_id}" not in state[0]:
+    if state is None or (
+        f"{PHOTO_PREFIX}{photo_id}" not in state[0]
+        and f"{PHOTO_PREFIX}{photo_id}" not in _get_image_queue()
+    ):
         abort(404)
     path = _photo_path(photo_id)
     if not path.is_file():
@@ -127,10 +160,11 @@ def configure():
     photos_deleted = True
     state = _get_stack_state()
     if state is not None:
-        for item in state[0]:
+        for item in [*state[0], *_get_image_queue()]:
             if not _delete_photo(item):
                 photos_deleted = False
     session["stack"] = []
+    session["image_queue"] = []
     session["capacity"] = capacity
     flash(f"Pila configurada con capacidad para {capacity} elementos.", "success")
     if not photos_deleted:
@@ -164,9 +198,10 @@ def add_photo():
     if state is None:
         return redirect(url_for("index"))
 
-    stack, capacity = state
-    if len(stack) >= capacity:
-        flash("La pila está llena. Desapila un elemento antes de agregar una foto.", "warning")
+    _, capacity = state
+    image_queue = _get_image_queue()
+    if len(image_queue) >= capacity:
+        flash("La cola de imágenes está llena. Retira una foto antes de agregar otra.", "warning")
         return redirect(url_for("index"))
 
     photo_data = request.form.get("photo_data", "")
@@ -213,13 +248,61 @@ def add_photo():
         return redirect(url_for("index"))
 
     photo_item = f"{PHOTO_PREFIX}{photo_id}"
-    if not push(stack, photo_item, capacity):
-        _delete_photo(photo_item)
-        flash("La pila está llena. Desapila un elemento antes de agregar una foto.", "warning")
+    image_queue.append(photo_item)
+    session["image_queue"] = image_queue
+    flash("La foto se encoló al final de la cola de imágenes.", "success")
+    return redirect(url_for("index"))
+
+
+@app.post("/desencolar-foto")
+def remove_queued_photo():
+    state = _require_stack()
+    if state is None:
         return redirect(url_for("index"))
 
-    session["stack"] = stack
-    flash("La foto se agregó a la pila.", "success")
+    image_queue = _get_image_queue()
+    if not image_queue:
+        flash("La cola de imágenes está vacía.", "warning")
+        return redirect(url_for("index"))
+
+    photo_item = image_queue.pop(0)
+    session["image_queue"] = image_queue
+    photo_deleted = _delete_photo(photo_item)
+    flash("Se retiró la foto del frente de la cola.", "success")
+    if not photo_deleted:
+        flash("No se pudo borrar el archivo de foto del servidor.", "warning")
+    return redirect(url_for("index"))
+
+
+@app.post("/consultar-frente-fotos")
+def show_image_queue_front():
+    state = _require_stack()
+    if state is None:
+        return redirect(url_for("index"))
+
+    image_queue = _get_image_queue()
+    if image_queue:
+        flash("La foto que sigue en la cola es la que aparece primero.", "info")
+    else:
+        flash("La cola de imágenes está vacía.", "warning")
+    return redirect(url_for("index"))
+
+
+@app.post("/vaciar-cola-fotos")
+def clear_image_queue():
+    state = _require_stack()
+    if state is None:
+        return redirect(url_for("index"))
+
+    image_queue = _get_image_queue()
+    photos_deleted = True
+    for item in image_queue:
+        if not _delete_photo(item):
+            photos_deleted = False
+    session["image_queue"] = []
+    flash("Se vació la cola de imágenes.", "success")
+    if not photos_deleted:
+        flash("No se pudieron borrar todas las fotos del servidor.", "warning")
     return redirect(url_for("index"))
 
 
@@ -268,16 +351,9 @@ def clear_stack():
     if state is None:
         return redirect(url_for("index"))
 
-    stack, capacity = state
-    photos_deleted = True
-    for item in stack:
-        if not _delete_photo(item):
-            photos_deleted = False
+    stack, _ = state
     session["stack"] = []
-    session["capacity"] = capacity
     flash("La pila se vació.", "success")
-    if not photos_deleted:
-        flash("No se pudieron borrar todas las fotos del servidor.", "warning")
     return redirect(url_for("index"))
 
 

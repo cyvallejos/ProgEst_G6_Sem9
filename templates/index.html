@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Aplicación sencilla para practicar la estructura de datos pila.">
-    <title>Mi pila | Estructuras de datos</title>
+    <title>Mi pila y cola de imágenes | Estructuras de datos</title>
     <link
       href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}"
       rel="stylesheet"
@@ -13,8 +13,8 @@
   <body class="bg-light">
     <header class="bg-primary text-white py-4">
       <div class="container">
-        <h1 class="h2 mb-1">Mi pila</h1>
-        <p class="mb-0">Practica la estructura LIFO: el último en entrar es el primero en salir.</p>
+        <h1 class="h2 mb-1">Mi pila y cola de imágenes</h1>
+        <p class="mb-0">Texto LIFO: último en entrar, primero en salir. Fotos FIFO: primero en entrar, primero en salir.</p>
       </div>
     </header>
 
@@ -94,9 +94,12 @@
 
             <div class="card shadow-sm mt-4">
               <div class="card-body">
-                <h2 class="h4 card-title">Tomar una foto</h2>
+                <h2 class="h4 card-title">Agregar foto a la cola</h2>
                 <p class="text-body-secondary">
-                  Permite el acceso a la cámara y captura una foto para agregarla como elemento.
+                  Las fotos se procesan en orden de llegada: primero en entrar, primero en salir.
+                </p>
+                <p class="small text-body-secondary">
+                  {{ image_count }} de {{ capacity }} fotos en la cola.
                 </p>
                 <div class="ratio ratio-4x3 bg-dark rounded overflow-hidden mb-3">
                   <video
@@ -128,9 +131,9 @@
                     class="btn btn-success"
                     id="add-photo"
                     type="submit"
-                    {% if item_count >= capacity %}disabled{% endif %}
+                    disabled
                   >
-                    Agregar foto a la pila
+                    Agregar foto a la cola
                   </button>
                 </form>
               </div>
@@ -143,7 +146,7 @@
             <div class="card-body">
               <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
                 <div>
-                  <h2 class="h4 card-title mb-1" id="stack-title">Contenido de la pila</h2>
+                  <h2 class="h4 card-title mb-1" id="stack-title">Pila de texto</h2>
                   {% if capacity is not none %}
                     <p class="text-body-secondary mb-0">
                       {{ item_count }} de {{ capacity }} elementos
@@ -215,6 +218,75 @@
           <p class="small text-body-secondary mt-3">
             La cima de la pila siempre aparece primero. Al desapilar, se elimina ese elemento.
           </p>
+
+          <div class="card shadow-sm mt-4">
+            <div class="card-body">
+              <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                <div>
+                  <h2 class="h4 card-title mb-1" id="image-queue-title">Cola de imágenes</h2>
+                  {% if capacity is not none %}
+                    <p class="text-body-secondary mb-0">
+                      {{ image_count }} de {{ capacity }} fotos
+                    </p>
+                  {% else %}
+                    <p class="text-body-secondary mb-0">Configura una pila para empezar.</p>
+                  {% endif %}
+                </div>
+                {% if capacity is not none %}
+                  <span class="badge text-bg-info fs-6">
+                    {{ "Llena" if image_count >= capacity else "Disponible" }}
+                  </span>
+                {% endif %}
+              </div>
+              {% if capacity is none %}
+                <div class="alert alert-info mb-0" role="status">
+                  Configura una pila para usar también la cola de imágenes.
+                </div>
+              {% elif image_queue %}
+                <ol class="list-group list-group-numbered" aria-label="Fotos en orden de llegada">
+                  {% for item in image_queue %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                      <span class="d-flex flex-column gap-2">
+                        <span>{{ "Frente de la cola" if loop.first else "Foto en espera" }}</span>
+                        <img
+                          src="{{ url_for('photo', photo_id=item|replace(photo_prefix, '', 1)) }}"
+                          alt="{{ 'Foto al frente de la cola' if loop.first else 'Foto en espera en la cola' }}"
+                          class="img-thumbnail"
+                          width="320"
+                          loading="lazy"
+                        >
+                      </span>
+                    </li>
+                  {% endfor %}
+                </ol>
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                  <form action="{{ url_for('remove_queued_photo') }}" method="post" data-confirm="¿Retirar la foto que está al frente de la cola?">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-warning" type="submit">Retirar foto del frente</button>
+                  </form>
+                  <form action="{{ url_for('show_image_queue_front') }}" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-outline-primary" type="submit">Consultar frente</button>
+                  </form>
+                  <form action="{{ url_for('clear_image_queue') }}" method="post" data-confirm="¿Vaciar todas las fotos de la cola?">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-outline-danger" type="submit">Vaciar cola</button>
+                  </form>
+                </div>
+              {% else %}
+                <div class="alert alert-secondary mb-0" role="status">
+                  La cola de imágenes está vacía. Toma una foto para agregarla.
+                </div>
+                <form action="{{ url_for('show_image_queue_front') }}" method="post" class="mt-3">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-outline-primary" type="submit">Consultar frente</button>
+                </form>
+              {% endif %}
+              <p class="small text-body-secondary mt-3 mb-0">
+                El frente muestra la foto más antigua. Al retirar, sale esa foto primero.
+              </p>
+            </div>
+          </div>
         </section>
       </div>
     </main>
@@ -239,6 +311,7 @@
         let cameraStream;
         const photoCanvas = document.getElementById("photo-canvas");
         const photoData = document.getElementById("photo-data");
+        const queueHasSpace = {{ "true" if capacity is not none and image_count < capacity else "false" }};
 
         startCameraButton.addEventListener("click", async () => {
           if (!navigator.mediaDevices?.getUserMedia) {
@@ -288,8 +361,10 @@
             photoCanvas.height,
           );
           photoData.value = photoCanvas.toDataURL("image/jpeg", 0.82);
-          addPhotoButton.disabled = false;
-          cameraStatus.textContent = "Foto capturada. Agrégala a la pila o toma otra para reemplazarla.";
+          addPhotoButton.disabled = !queueHasSpace;
+          cameraStatus.textContent = queueHasSpace
+            ? "Foto capturada. Agrégala a la cola o toma otra para reemplazarla."
+            : "Foto capturada, pero la cola está llena. Retira una foto antes de agregar otra.";
         });
 
         addPhotoButton.disabled = true;
