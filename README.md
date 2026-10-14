@@ -14,7 +14,7 @@ $env:FLASK_SECRET_KEY = python -c "import secrets; print(secrets.token_hex(32))"
 python -m flask --app app run --debug
 ```
 
-Abre `http://127.0.0.1:5000` en el navegador. La clave aleatoria se puede omitir para una demostración local; si no se define, las sesiones se invalidan al reiniciar el servidor. Para producción, configura una clave secreta estable y administra la pila en almacenamiento del servidor.
+Abre `http://127.0.0.1:5000` en el navegador. Para tomar y agregar una foto, crea la pila, pulsa **Activar cámara**, concede permiso al navegador y después pulsa **Tomar foto** y **Agregar foto a la pila**. La cámara requiere permiso y un contexto seguro: `localhost`/`127.0.0.1` para pruebas locales o HTTPS al publicar la aplicación. Las fotos se guardan en `instance/photos/`, no en la cookie de sesión, y se sirven únicamente si pertenecen a la pila de esa sesión. Se eliminan al desapilar la foto, vaciar la pila o reiniciarla. La clave aleatoria se puede omitir para una demostración local; si no se define, las sesiones se invalidan al reiniciar el servidor. Para producción, configura una clave secreta estable y administra la pila en almacenamiento del servidor.
 
 ## Probar
 
@@ -22,4 +22,4 @@ Abre `http://127.0.0.1:5000` en el navegador. La clave aleatoria se puede omitir
 python -m unittest -v test_app.py
 ```
 
-La aplicación permite crear o reiniciar la pila, apilar valores, consultar el tope, desapilarlo y vaciar la pila. También valida la capacidad y los valores en el servidor, y protege los formularios con tokens CSRF.
+La aplicación permite crear o reiniciar la pila, apilar valores o fotos, consultar el tope, desapilarlo y vaciar la pila. También valida la capacidad y los valores en el servidor, limita las fotos JPEG a 2 MB antes del procesamiento, y protege los formularios con tokens CSRF.
